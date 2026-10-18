@@ -1,16 +1,35 @@
+# NOVA Studio isolado no Hostinger: sem portas públicas e sem tocar em outros serviços.
 services:
   nova-studio:
     build: .
-    container_name: nova-avatar-studio
     restart: unless-stopped
-    # Propositalmente NÃO exposto à internet.
     ports:
       - "127.0.0.1:8018:8018"
     environment:
-      STUDIO_API_TOKEN: ${STUDIO_API_TOKEN:-}
+      STUDIO_API_TOKEN: ${STUDIO_API_TOKEN:?Defina STUDIO_API_TOKEN no arquivo .env}
+      STUDIO_PUBLIC_DEPLOYMENT: "1"
       STUDIO_DATA_DIR: /app/storage
     volumes:
       - nova_storage:/app/storage
-    mem_limit: 2g
+    mem_limit: 1536m
+    cpus: "1.0"
+    pids_limit: 128
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8018/live',timeout=5)"]
+      interval: 30s
+      timeout: 7s
+      retries: 3
+      start_period: 45s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 volumes:
   nova_storage:
