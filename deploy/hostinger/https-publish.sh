@@ -29,8 +29,8 @@ done
 [[ ! -e "$CERT_ROOT/live/$CERT_NAME" ]] || fail 'Já existe certificado para o NOVA. Revisão manual é necessária para evitar mudanças inesperadas.'
 [[ -f "$REPO_BASE/.env" ]] || fail 'Arquivo de chave NOVA não encontrado.'
 nginx -t >/dev/null 2>&1 || fail 'O Nginx já apresenta falhas; nenhum ajuste foi feito.'
-nginx -T 2>/dev/null | grep -Eq '^[[:space:]]*include[[:space:]]+/etc/nginx/conf\.d/\*\.conf;' || fail 'Nginx não inclui conf.d/*.conf. Verificar layout antes de publicar.'
-if nginx -T 2>/dev/null | grep -Eq 'server_name[[:space:]]+nova\.gestaolojasonline\.tech'; then fail 'Já existe um vhost para NOVA. Nenhuma alteração efetuada.'; fi
+nginx -T 2>/dev/null | grep -E '^[[:space:]]*include[[:space:]]+/etc/nginx/conf\.d/\*\.conf;' >/dev/null || fail 'Nginx não inclui conf.d/*.conf. Verificar layout antes de publicar.'
+if nginx -T 2>/dev/null | grep -E 'server_name[[:space:]]+nova\.gestaolojasonline\.tech' >/dev/null; then fail 'Já existe um vhost para NOVA. Nenhuma alteração efetuada.'; fi
 [[ $(curl -fsS --max-time 5 'http://127.0.0.1:8018/live') == *'"ok":true'* ]] || fail 'O NOVA não respondeu na porta local 8018.'
 http_code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 'http://127.0.0.1:8018/api/v1/projects')
 [[ "$http_code" == 401 ]] || fail "A API não está protegida (HTTP $http_code)."
