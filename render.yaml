@@ -1,0 +1,15 @@
+# Free evaluation environment, isolated from Hermes and other user projects.
+# Requires a NEW standalone repository/account connection to deploy.
+services:
+  - type: web
+    name: nova-avatar-studio-preview
+    runtime: docker
+    plan: free
+    healthCheckPath: /live
+    envVars:
+      - key: STUDIO_PUBLIC_DEPLOYMENT
+        value: "1"
+      - key: STUDIO_API_TOKEN
+        generateValue: true
+      - key: STUDIO_DATA_DIR
+        value: /app/storage

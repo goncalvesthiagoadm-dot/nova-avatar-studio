@@ -1,0 +1,16 @@
+services:
+  nova-studio:
+    build: .
+    container_name: nova-avatar-studio
+    restart: unless-stopped
+    # Propositalmente NÃO exposto à internet.
+    ports:
+      - "127.0.0.1:8018:8018"
+    environment:
+      STUDIO_API_TOKEN: ${STUDIO_API_TOKEN:-}
+      STUDIO_DATA_DIR: /app/storage
+    volumes:
+      - nova_storage:/app/storage
+    mem_limit: 2g
+volumes:
+  nova_storage:

@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0c1017" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="NOVA Studio" />
+  <title>NOVA Studio — criação de vídeos com avatar</title>
+  <link rel="stylesheet" href="/static/studio.css" />
+  <script src="/static/studio.js" defer></script>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="logo"><div class="logo-mark">N<span>✦</span></div><div><strong>NOVA</strong><small>AVATAR STUDIO</small></div></div>
+      <div class="navgroup"><div class="group-label">WORKSPACE</div>
+        <button class="navitem active" id="navStudio"><span class="navicon">◈</span> Estúdio <span class="navright">01</span></button>
+        <button class="navitem" id="navProjects"><span class="navicon">▦</span> Projetos</button>
+      </div>
+      <div class="navgroup"><div class="group-label">PROJETOS</div>
+        <div class="projects" id="projects"><p class="muted small">Carregando projetos…</p></div>
+        <button id="newProjectSide" class="new-project"><span>＋</span> Novo projeto</button>
+      </div>
+      <div class="side-bottom">
+        <div class="offline-badge"><span class="pulse" id="healthDot"></span><span id="serverStatus">Conectando ao motor…</span></div>
+        <p>Independente • Integração via API</p>
+        <a href="/api/docs" target="_blank" rel="noopener">Documentação da API ↗</a>
+      </div>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <div class="top-left"><span class="crumb">Workspace</span><span class="separator">/</span><strong id="currentCrumb">Estúdio</strong></div>
+        <div class="top-actions"><span class="environment">ACESSO PROTEGIDO</span><button class="keybtn" id="changeKey" title="Autenticação">⚿ <span>Entrar / Chave</span></button><button class="primary small" id="newProjectTop">＋ Novo vídeo</button></div>
+      </header>
+
+      <main class="content">
+        <div class="page-heading">
+          <div><span class="eyebrow"><span class="dot"></span> INDEPENDENT CREATION PLATFORM</span><h1>Crie o seu próximo vídeo<span class="accent">.</span></h1>
+          <p>Roteiro, vídeo-base e voz, em um estúdio modular. Um projeto, vários destinos.</p></div>
+          <div class="version">BETA 0.2 <span>•</span> MOTOR ABERTO</div>
+        </div>
+        <div class="grid-content">
+          <section class="workspace-panel">
+            <div class="panel-heading"><div><span class="step-label">01 / PROJETO</span><h2>Roteiro e identidade</h2></div><span class="status-tag" id="projectBadge">Sem projeto</span></div>
+            <div class="formrow"><label for="projectName">NOME DO PROJETO</label><input id="projectName" type="text" maxlength="70" placeholder="Ex.: Apresentação do produto" /></div>
+            <div class="formrow"><div class="labelrow"><label for="script">TEXTO DA APRESENTAÇÃO</label><span class="charcount" id="charCount">0 / 4000</span></div>
+            <textarea id="script" maxlength="4000" rows="6" placeholder="Escreva aqui o que a apresentadora deve dizer…"></textarea></div>
+            <div class="inline-actions"><button class="secondary" id="saveProject">Salvar roteiro</button><button class="ghost" id="hearScript">▷ Ouvir no navegador</button></div>
+            <p class="fieldnote">A leitura de texto é uma prévia com a voz do navegador; não produz a narração do MP4.</p>
+
+            <div class="line"></div>
+            <div class="panel-heading compact"><div><span class="step-label">02 / ARQUIVOS</span><h2>Seu material</h2></div></div>
+            <div class="drop-grid">
+              <label class="dropzone" id="dropVideo" for="videoUpload"><span class="dropicon">▣</span><strong>Vídeo-base</strong><small>MP4, MOV ou WebM</small><span class="pick-label">Selecionar vídeo ↗</span><input type="file" id="videoUpload" accept="video/mp4,video/quicktime,video/webm" hidden /></label>
+              <label class="dropzone" id="dropAudio" for="audioUpload"><span class="dropicon">♫</span><strong>Áudio da voz</strong><small>WAV, MP3, M4A ou AAC</small><span class="pick-label">Selecionar áudio ↗</span><input type="file" id="audioUpload" accept="audio/wav,audio/mpeg,audio/mp4,audio/aac,.m4a" hidden /></label>
+            </div>
+            <p id="uploadInfo" class="fieldnote">Vídeos de até 60 MB; áudio até 15 MB e duração máxima de 60 segundos.</p>
+
+            <div class="line"></div>
+            <div class="panel-heading compact"><div><span class="step-label">03 / INTELIGÊNCIA</span><h2>Motor de geração</h2></div></div>
+            <div id="engineOptions" class="engine-options"><div class="skeleton">Conferindo motores disponíveis…</div></div>
+            <div class="note-warning" id="engineNote">Nenhuma geração de IA é simulada: o modo técnico apenas substitui o áudio do vídeo-base.</div>
+            <div class="bottom-actions"><button class="primary render" id="renderBtn">✦ Processar vídeo <span>↗</span></button><span class="tiny" id="lastJob">Sem renderizações</span></div>
+          </section>
+
+          <section class="preview-panel">
+            <div class="preview-header"><div><span class="step-label">MONITOR DE PRÉVIA</span><h2>Resultado</h2></div><span class="live-indicator">● LIVE PREVIEW</span></div>
+            <div class="stage" id="stage"><div class="stage-glow"></div><div class="stage-inner" id="stageInner">
+              <div class="preview-shape"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="playmark">▶</div></div>
+              <strong>Sua próxima cena começa aqui.</strong><small>Adicione um vídeo-base para visualizar o material.</small>
+            </div><video id="videoPreview" controls playsinline preload="metadata" hidden></video><div class="stage-corner">NOVA • STUDIO</div></div>
+            <div class="preview-status"><span class="statusdot" id="stageDot"></span><div><strong id="resultHeading">Aguardando material</strong><p id="resultDescription">O processamento e a exportação serão exibidos aqui.</p></div><span class="preview-percent" id="renderState">IDLE</span></div>
+            <a class="download" id="download" href="#" hidden>↓ Baixar vídeo MP4</a>
+            <div class="info-grid"><div><span>MOTOR</span><strong id="selectedEngineName">Não selecionado</strong></div><div><span>EXPORTAÇÃO</span><strong>MP4 • H.264</strong></div></div>
+            <div class="realism-note"><span>✦</span><div><strong>Qualidade antes da interface</strong><p>Esta versão testa o fluxo real de arquivos. Sincronização labial depende de um motor de IA instalado e validado. Sem animações falsas.</p></div></div>
+          </section>
+        </div>
+        <footer class="footnote"><span>NOVA Studio · 0.2</span><span>Projeto isolado. Nenhum acesso ao Hermes ou aos dashboards.</span></footer>
+      </main>
+    </div>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
