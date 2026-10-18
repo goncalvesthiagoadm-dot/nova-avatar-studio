@@ -132,9 +132,47 @@ $("saveProject").onclick=save;
 for(const x of ["newProjectSide","newProjectTop"])$(x).onclick=newProject;
 $("navStudio").onclick=()=>{document.querySelector(".content").scrollIntoView({behavior:"smooth"})};
 $("navProjects").onclick=()=>{$("projects").scrollIntoView({behavior:"smooth"})};
-$("changeKey").onclick=()=>{
-  const next=prompt("Chave da API (armazenada apenas nesta sessão do navegador):",state.apiKey);
-  if(next===null)return;state.apiKey=next.trim();if(state.apiKey)sessionStorage.setItem("nova_studio_key",state.apiKey);else sessionStorage.removeItem("nova_studio_key");boot();
+function openKeyDialog(){
+  const dialog=$("keyDialog");
+  $("apiKeyInput").value="";
+  $("keyStatus").hidden=true;
+  $("keyStatus").classList.remove("success");
+  dialog.showModal();
+  $("apiKeyInput").focus();
+}
+$("changeKey").onclick=openKeyDialog;
+$("cancelKey").onclick=()=>$("keyDialog").close();
+$("toggleKeyVisibility").onclick=()=>{
+  const input=$("apiKeyInput"), visible=input.type==="text";
+  input.type=visible?"password":"text";
+  $("toggleKeyVisibility").textContent=visible?"Mostrar":"Ocultar";
+  $("toggleKeyVisibility").setAttribute("aria-label",visible?"Mostrar chave":"Ocultar chave");
+};
+$("keyForm").onsubmit=async e=>{
+  e.preventDefault();
+  const candidate=$("apiKeyInput").value.trim(), button=$("saveKey"), status=$("keyStatus");
+  if(!candidate){status.textContent="Cole a chave privada para continuar.";status.hidden=false;return}
+  button.disabled=true;button.textContent="Validando…";
+  status.hidden=true;status.classList.remove("success");
+  try{
+    const response=await fetch("/api/v1/health",{headers:{"x-api-key":candidate},cache:"no-store"});
+    const result=response.headers.get("content-type")?.includes("json")?await response.json():null;
+    if(!response.ok)throw new Error(response.status===401?"A chave foi rejeitada. Confira se copiou somente o valor depois de STUDIO_API_TOKEN=, sem aspas.":(result?.detail||`Erro HTTP ${response.status}`));
+    state.apiKey=candidate;
+    sessionStorage.setItem("nova_studio_key",candidate);
+    $("keyDialog").close();
+    toast("Chave validada e salva nesta sessão.");
+    await boot();
+  }catch(err){
+    state.apiKey="";
+    sessionStorage.removeItem("nova_studio_key");
+    setConnected(false);
+    status.textContent=err.message||"Não foi possível validar a chave.";
+    status.hidden=false;
+    $("apiKeyInput").focus();
+  }finally{
+    button.disabled=false;button.textContent="Validar e conectar";
+  }
 };
 $("script").oninput=e=>{$("charCount").textContent=e.target.value.length+" / 4000"};
 $("videoUpload").onchange=e=>upload("video",e.target.files?.[0]);
