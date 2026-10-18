@@ -21,7 +21,7 @@ rollback() {
 }
 trap rollback EXIT
 [[ $(id -u) -eq 0 ]] || fail 'Execute com sudo ou root.'
-for cmd in nginx docker curl awk getent systemctl openssl ss; do
+for cmd in nginx docker curl awk getent systemctl openssl ss python3; do
   command -v "$cmd" >/dev/null 2>&1 || fail "Ferramenta necessária não encontrada: $cmd"
 done
 [[ -d "$REPO_BASE/.git" ]] || fail 'Instalação /opt/nova-studio não foi encontrada.'
@@ -39,7 +39,14 @@ http_code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 'http://127.0.0
 EXPECTED_IP=$(curl -4fsS --max-time 7 'https://api.ipify.org') || fail 'Não foi possível consultar o IPv4 público de saída.'
 [[ "$EXPECTED_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || fail 'IPv4 público inesperado.'
 DNS_IPS=$(getent ahostsv4 "$DOMAIN" 2>/dev/null | awk '{print $1}' | sort -u) || true
-[[ -n "$DNS_IPS" ]] || fail 'DNS do subdomínio não existe. Crie registro A no Cloudflare antes de continuar.'
+if [[ -z "$DNS_IPS" ]]; then
+  echo 'Resolvedor local ainda não reconhece NOVA; verificando DNS público do Google (somente leitura).'
+  DNS_IPS=$(curl -fsS --max-time 12 "https://dns.google/resolve?name=${DOMAIN}&type=A" | python3 -c 'import json,sys
+d=json.load(sys.stdin)
+a=d.get("Answer",[]) if d.get("Status")==0 else []
+print(" ".join(sorted({r.get("data","") for r in a if r.get("type")==1 and r.get("name","").rstrip(".").lower()=="nova.gestaolojasonline.tech"})))') || fail 'Falha ao consultar DNS público de forma segura.'
+  [[ -n "$DNS_IPS" ]] || fail 'DNS público não possui registro A válido para NOVA.'
+fi
 [[ "$DNS_IPS" == "$EXPECTED_IP" ]] || fail "DNS atual ($DNS_IPS) diferente do IPv4 público de saída ($EXPECTED_IP). Confira o IP de entrada no hPanel e deixe Cloudflare em DNS only."
 if [[ -e "$REPO_BASE/.hosting-dns-confirmed" ]]; then
   echo 'Marcador local de DNS encontrado.'
