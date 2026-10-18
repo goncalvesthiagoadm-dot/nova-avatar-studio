@@ -82,6 +82,23 @@
       </main>
     </div>
   </div>
+  <dialog class="key-dialog" id="keyDialog" aria-labelledby="keyDialogTitle">
+    <form id="keyForm" novalidate>
+      <span class="step-label">ACESSO PROTEGIDO</span>
+      <h2 id="keyDialogTitle">Conectar ao NOVA Studio</h2>
+      <p class="key-help">Cole a chave privada do arquivo <code>/opt/nova-studio/.env</code>. Ela só fica salva nesta sessão do navegador.</p>
+      <label for="apiKeyInput">CHAVE PRIVADA</label>
+      <div class="key-input-wrap">
+        <input id="apiKeyInput" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Cole a chave aqui" />
+        <button type="button" class="key-visibility" id="toggleKeyVisibility" aria-label="Mostrar chave">Mostrar</button>
+      </div>
+      <p class="key-status" id="keyStatus" role="status" aria-live="polite" hidden></p>
+      <div class="key-dialog-actions">
+        <button type="button" class="secondary" id="cancelKey">Cancelar</button>
+        <button type="submit" class="primary" id="saveKey">Validar e conectar</button>
+      </div>
+    </form>
+  </dialog>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 </body>
 </html>
