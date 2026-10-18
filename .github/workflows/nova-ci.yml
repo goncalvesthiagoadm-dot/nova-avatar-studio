@@ -35,6 +35,9 @@ jobs:
         run: |
           bash -n deploy/hostinger/preflight.sh
           bash -n deploy/hostinger/install.sh
+          bash -n deploy/hostinger/https-check.sh
+          bash -n deploy/hostinger/https-publish.sh
+          bash -n deploy/hostinger/https-renew.sh
           STUDIO_API_TOKEN=ci-valid-test-only-token-not-for-production docker compose config -q
       - name: Test API and FFmpeg render
         run: python -m pytest -q tests
