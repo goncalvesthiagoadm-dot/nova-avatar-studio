@@ -78,9 +78,28 @@ chmod 644 "$TMP_CONF"
 mv "$TMP_CONF" "$NGINX_CONF"
 CONF_CREATED=1
 nginx -t || fail 'Nova configuração HTTP não passou em nginx -t.'
+nginx -T 2>/dev/null | grep -F 'server_name nova.gestaolojasonline.tech;' >/dev/null || fail 'Novo vhost não está incluído na configuração efetiva do Nginx.'
 systemctl reload nginx || fail 'Não foi possível recarregar o Nginx.'
-LOCAL_PROBE=$(curl -sS --max-time 5 -H "Host: $DOMAIN" 'http://127.0.0.1/.well-known/acme-challenge/nova-probe')
-[[ "$LOCAL_PROBE" == 'nova-acme-probe' ]] || fail 'O Nginx não alcança o diretório de desafio ACME.'
+
+# systemctl reload pode terminar antes de os workers novos aceitarem conexões.
+# A verificação anterior falhava imediatamente, quando o vhost antigo ainda respondia 404.
+LOCAL_PROBE=''
+LOCAL_STATUS=''
+for attempt in $(seq 1 20); do
+  LOCAL_PROBE=$(curl --noproxy '*' -sS --max-time 4 -H "Host: $DOMAIN" 'http://127.0.0.1/.well-known/acme-challenge/nova-probe' 2>/dev/null || true)
+  if [[ "$LOCAL_PROBE" == 'nova-acme-probe' ]]; then
+    echo "Desafio ACME local pronto (tentativa $attempt/20)."
+    break
+  fi
+  if [[ "$attempt" -lt 20 ]]; then sleep 1; fi
+done
+if [[ "$LOCAL_PROBE" != 'nova-acme-probe' ]]; then
+  LOCAL_STATUS=$(curl --noproxy '*' -sS -o /dev/null -w '%{http_code}' --max-time 5 -H "Host: $DOMAIN" 'http://127.0.0.1/.well-known/acme-challenge/nova-probe' || true)
+  echo "Diagnóstico: Nginx novo não serviu o arquivo após 20 tentativas; HTTP local $LOCAL_STATUS." >&2
+  echo 'Vhosts ativos para o domínio (sem exibir configuração privada):' >&2
+  nginx -T 2>/dev/null | awk '/^# configuration file / {file=$0} /server_name[[:space:]]+nova\\.gestaolojasonline\\.tech/ {print file " | " $0}' >&2 || true
+  fail 'Rota ACME local não respondeu. Reversão automática; não alterar outros vhosts.'
+fi
 PUBLIC_PROBE=$(curl --max-time 10 --silent --show-error --fail --resolve "$DOMAIN:80:$EXPECTED_IP" "http://$DOMAIN/.well-known/acme-challenge/nova-probe") || fail 'A porta 80 pública parece bloqueada; confira firewall da VPS/Hostinger.'
 [[ "$PUBLIC_PROBE" == 'nova-acme-probe' ]] || fail 'O desafio ACME não é acessível no IP publicado.'
 
