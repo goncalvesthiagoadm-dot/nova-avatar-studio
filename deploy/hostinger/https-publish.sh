@@ -97,7 +97,7 @@ if [[ "$LOCAL_PROBE" != 'nova-acme-probe' ]]; then
   LOCAL_STATUS=$(curl --noproxy '*' -sS -o /dev/null -w '%{http_code}' --max-time 5 -H "Host: $DOMAIN" 'http://127.0.0.1/.well-known/acme-challenge/nova-probe' || true)
   echo "Diagnóstico: Nginx novo não serviu o arquivo após 20 tentativas; HTTP local $LOCAL_STATUS." >&2
   echo 'Vhosts ativos para o domínio (sem exibir configuração privada):' >&2
-  nginx -T 2>/dev/null | awk '/^# configuration file / {file=$0} /server_name[[:space:]]+nova\\.gestaolojasonline\\.tech/ {print file " | " $0}' >&2 || true
+  nginx -T 2>/dev/null | awk '/^# configuration file / {file=$0} /server_name[[:space:]]+nova\.gestaolojasonline\.tech/ {print file " | " $0}' >&2 || true
   fail 'Rota ACME local não respondeu. Reversão automática; não alterar outros vhosts.'
 fi
 PUBLIC_PROBE=$(curl --max-time 10 --silent --show-error --fail --resolve "$DOMAIN:80:$EXPECTED_IP" "http://$DOMAIN/.well-known/acme-challenge/nova-probe") || fail 'A porta 80 pública parece bloqueada; confira firewall da VPS/Hostinger.'
