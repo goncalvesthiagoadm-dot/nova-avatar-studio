@@ -1,0 +1,37 @@
+name: NOVA Studio CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout NOVA Studio
+        uses: actions/checkout@v4
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pytest httpx
+      - name: Validate Hostinger scripts
+        run: |
+          bash -n deploy/hostinger/preflight.sh
+          bash -n deploy/hostinger/install.sh
+          STUDIO_API_TOKEN=ci-valid-test-only-token-not-for-production docker compose config -q
+      - name: Test API and FFmpeg render
+        run: python -m pytest -q tests
+      - name: Build isolated Docker image
+        run: docker build -t nova-studio:ci .
