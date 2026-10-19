@@ -1,0 +1,64 @@
+name: Deploy NOVA to Hostinger
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nova-hostinger-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: nova-production
+    steps:
+      - name: Deploy the selected main commit over pinned SSH
+        shell: bash
+        env:
+          NOVA_SSH_HOST: ${{ vars.NOVA_SSH_HOST }}
+          NOVA_SSH_USER: ${{ vars.NOVA_SSH_USER }}
+          NOVA_SSH_PORT: ${{ vars.NOVA_SSH_PORT }}
+          NOVA_SSH_PRIVATE_KEY: ${{ secrets.NOVA_SSH_PRIVATE_KEY }}
+          NOVA_SSH_KNOWN_HOSTS: ${{ secrets.NOVA_SSH_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$NOVA_SSH_HOST" =~ ^[A-Za-z0-9.-]+$ ]] || { echo "Configure a valid NOVA_SSH_HOST environment variable."; exit 1; }
+          [[ "$NOVA_SSH_USER" =~ ^[A-Za-z_][A-Za-z0-9_-]*$ ]] || { echo "Configure a valid NOVA_SSH_USER environment variable."; exit 1; }
+          [[ "$NOVA_SSH_PORT" =~ ^[0-9]{1,5}$ ]] || { echo "Configure NOVA_SSH_PORT (usually 22)."; exit 1; }
+          (( NOVA_SSH_PORT >= 1 && NOVA_SSH_PORT <= 65535 )) || { echo "NOVA_SSH_PORT must be 1–65535."; exit 1; }
+          [[ -n "$NOVA_SSH_PRIVATE_KEY" ]] || { echo "Configure NOVA_SSH_PRIVATE_KEY in the nova-production environment secrets."; exit 1; }
+          [[ -n "$NOVA_SSH_KNOWN_HOSTS" ]] || { echo "Configure pinned NOVA_SSH_KNOWN_HOSTS in the nova-production environment secrets."; exit 1; }
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid workflow commit SHA."; exit 1; }
+
+          install -m 700 -d "$HOME/.ssh"
+          known_hosts="$RUNNER_TEMP/nova-known-hosts"
+          printf '%s\n' "$NOVA_SSH_KNOWN_HOSTS" > "$known_hosts"
+          chmod 600 "$known_hosts"
+
+          eval "$(ssh-agent -s)" >/dev/null
+          cleanup() {
+            ssh-add -D >/dev/null 2>&1 || true
+            ssh-agent -k >/dev/null 2>&1 || true
+            rm -f "$known_hosts"
+          }
+          trap cleanup EXIT
+          printf '%s\n' "$NOVA_SSH_PRIVATE_KEY" | ssh-add - >/dev/null
+
+          ssh \
+            -p "$NOVA_SSH_PORT" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$known_hosts" \
+            -o PasswordAuthentication=no \
+            -o KbdInteractiveAuthentication=no \
+            -o PreferredAuthentications=publickey \
+            -o ConnectTimeout=20 \
+            -o ServerAliveInterval=10 \
+            -o ServerAliveCountMax=3 \
+            "$NOVA_SSH_USER@$NOVA_SSH_HOST" \
+            "sudo -n env NOVA_EXPECTED_COMMIT='$GITHUB_SHA' bash /opt/nova-studio/deploy/hostinger/install.sh"
