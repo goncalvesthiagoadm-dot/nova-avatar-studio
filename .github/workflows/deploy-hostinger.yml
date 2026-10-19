@@ -22,7 +22,7 @@ jobs:
         env:
           NOVA_SSH_HOST: ${{ vars.NOVA_SSH_HOST }}
           NOVA_SSH_USER: ${{ vars.NOVA_SSH_USER }}
-          NOVA_SSH_PORT: ${{ vars.NOVA_SSH_PORT }}
+          NOVA_SSH_PORT: ${{ vars.NOVA_SSH_PORT || '22' }}
           NOVA_SSH_PRIVATE_KEY: ${{ secrets.NOVA_SSH_PRIVATE_KEY }}
           NOVA_SSH_KNOWN_HOSTS: ${{ secrets.NOVA_SSH_KNOWN_HOSTS }}
         run: |
