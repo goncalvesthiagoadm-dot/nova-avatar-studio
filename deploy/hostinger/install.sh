@@ -20,6 +20,7 @@ docker info >/dev/null 2>&1 || fail 'Docker não está ativo.'
 if [[ -e "$BASE" ]]; then
   [[ -d "$BASE/.git" ]] || fail 'Destino já existe e não é checkout Git. Não alterado.'
   [[ "$(git -C "$BASE" remote get-url origin 2>/dev/null || true)" == "$REPO" ]] || fail 'Repositório inesperado no destino. Não alterado.'
+  [[ "$(git -C "$BASE" branch --show-current)" == "main" ]] || fail 'O checkout NOVA não está em main. Não alterado.'
   [[ -z "$(git -C "$BASE" status --porcelain --untracked-files=no)" ]] || fail 'Há mudanças locais. Pare para revisão.'
 fi
 if ss -H -lnt '( sport = :8018 )' | grep -q .; then
