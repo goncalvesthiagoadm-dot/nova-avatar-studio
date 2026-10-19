@@ -10,7 +10,7 @@ No repositório GitHub, crie o Environment `nova-production` e configure:
 
 - `NOVA_SSH_HOST`: endereço da VPS.
 - `NOVA_SSH_USER`: usuário SSH com execução não interativa de `sudo` para o instalador do NOVA.
-- `NOVA_SSH_PORT`: porta SSH, normalmente `22`.
+- `NOVA_SSH_PORT`: porta SSH, se diferente de `22`. Se omitida, usa `22`.
 
 **Environment secrets**
 
