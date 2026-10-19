@@ -5,8 +5,12 @@ umask 077
 BASE=/opt/nova-studio
 REPO=https://github.com/goncalvesthiagoadm-dot/nova-avatar-studio.git
 PROJECT=nova-studio
+EXPECTED_COMMIT="${NOVA_EXPECTED_COMMIT:-}"
 fail() { printf '\nERRO: %s\n' "$*" >&2; exit 1; }
 [[ $(id -u) -eq 0 ]] || fail 'Execute com sudo.'
+if [[ -n "$EXPECTED_COMMIT" && ! "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+  fail 'NOVA_EXPECTED_COMMIT inválido.'
+fi
 for c in git docker curl openssl ss awk df; do
   command -v "$c" >/dev/null 2>&1 || fail "Falta $c. Instalação interrompida; nenhuma dependência global será alterada."
 done
@@ -29,9 +33,16 @@ disk_kb="$(df -Pk /opt | awk 'NR==2 {print $4}')"
 [[ -n "$disk_kb" && "$disk_kb" -ge 3500000 ]] || fail 'Disco com menos de 3,5 GB livres; não afetar outros serviços.'
 if [[ -e "$BASE" ]]; then
   git -C "$BASE" fetch origin main
+  if [[ -n "$EXPECTED_COMMIT" ]]; then
+    fetched_commit="$(git -C "$BASE" rev-parse FETCH_HEAD)"
+    [[ "$fetched_commit" == "$EXPECTED_COMMIT" ]] || fail 'O main mudou desde o início do deploy. Nenhuma atualização aplicada.'
+  fi
   git -C "$BASE" merge --ff-only FETCH_HEAD || fail 'Atualização cancelada (não é fast-forward).'
 else
   git clone --depth=1 --branch main "$REPO" "$BASE"
+  if [[ -n "$EXPECTED_COMMIT" ]]; then
+    [[ "$(git -C "$BASE" rev-parse HEAD)" == "$EXPECTED_COMMIT" ]] || fail 'O main mudou durante o deploy. Nenhuma imagem foi criada.'
+  fi
 fi
 cd "$BASE"
 if [[ ! -f .env ]]; then
