@@ -1,0 +1,92 @@
+name: NOVA Voice Lite Prebuilt Image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'voice_lite/**'
+      - 'compose.yml'
+      - '.github/workflows/nova-voice-image.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: nova-voice-image
+  cancel-in-progress: false
+
+jobs:
+  build-test-publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout NOVA repository
+        uses: actions/checkout@v5
+      - name: Build voice image away from Hostinger
+        run: |
+          docker build \
+            --label "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
+            --label "org.opencontainers.image.description=Optional isolated NOVA pt-BR voice worker" \
+            -t nova-voice-lite:tested -f voice_lite/Dockerfile .
+      - name: Start CPU-limited worker
+        run: |
+          docker run -d --name nova-voice-publish-smoke \
+            --memory=1024m --cpus=1 -p 127.0.0.1:18780:8880 \
+            nova-voice-lite:tested
+      - name: Health check and synthesize real voice
+        run: |
+          set -Eeuo pipefail
+          ready=0
+          for attempt in $(seq 1 90); do
+            if curl -fsS --max-time 3 http://127.0.0.1:18780/health >/tmp/nova-voice-ready.json 2>/dev/null; then
+              ready=1
+              break
+            fi
+            if ! docker ps --format '{{.Names}}' | grep -qx nova-voice-publish-smoke; then
+              echo "NOVA voice worker exited during startup"
+              docker logs --tail=80 nova-voice-publish-smoke || true
+              exit 1
+            fi
+            sleep 3
+          done
+          test "$ready" = 1
+          cat /tmp/nova-voice-ready.json
+          curl --fail-with-body --max-time 180 -sS \
+            http://127.0.0.1:18780/v1/audio/speech \
+            -H 'Content-Type: application/json' \
+            -d '{"model":"kokoro","input":"Olá! Eu sou a NOVA, a sua apresentadora virtual.","voice":"pf_dora","response_format":"wav","speed":1}' \
+            -o /tmp/nova-voice-ptbr.wav
+          python - <<'PY'
+          import wave
+          path = '/tmp/nova-voice-ptbr.wav'
+          with wave.open(path, 'rb') as wav:
+              duration = wav.getnframes() / wav.getframerate()
+              assert wav.getnchannels() == 1
+              assert wav.getsampwidth() == 2
+              assert 0.5 < duration < 60
+              print('Validated real pt-BR WAV duration:', round(duration, 2), 'seconds')
+          PY
+      - name: Log diagnostics on failure
+        if: failure()
+        run: docker logs --tail=80 nova-voice-publish-smoke || true
+      - name: Stop only the temporary test worker
+        if: always()
+        run: docker rm -f nova-voice-publish-smoke >/dev/null 2>&1 || true
+      - name: Login to GHCR using temporary GitHub Actions token
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$GH_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Publish only verified image (versioned and immutable-SHA tags)
+        if: success()
+        run: |
+          set -Eeuo pipefail
+          image="ghcr.io/goncalvesthiagoadm-dot/nova-voice-lite"
+          docker tag nova-voice-lite:tested "$image:v0.1.0"
+          docker tag nova-voice-lite:tested "$image:${GITHUB_SHA}"
+          docker push "$image:v0.1.0"
+          docker push "$image:${GITHUB_SHA}"
