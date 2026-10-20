@@ -56,6 +56,8 @@ services:
   # and never launched by standard NOVA installer/deploy.
   kokoro-lite:
     profiles: ["voice-lite"]
+    # Pull the tested image rather than compiling dependencies on the shared VPS.
+    image: ghcr.io/goncalvesthiagoadm-dot/nova-voice-lite:v0.1.0
     build:
       context: .
       dockerfile: voice_lite/Dockerfile
