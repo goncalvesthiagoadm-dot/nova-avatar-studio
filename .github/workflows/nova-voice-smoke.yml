@@ -53,10 +53,7 @@ jobs:
             -d '{"model":"kokoro","input":"Olá! Eu sou a NOVA, sua apresentadora virtual. Em breve vamos criar vídeos com uma voz natural em português.","voice":"pf_dora","response_format":"wav","speed":1.0}' \
             -o nova-voice-ptbr-smoke.wav
           test "$(stat -c '%s' nova-voice-ptbr-smoke.wav)" -gt 1000
-          ffprobe -v error -show_entries format=duration:stream=codec_name \
-            -of default=noprint_wrappers=1 nova-voice-ptbr-smoke.wav
-          ffprobe -v error -select_streams a:0 -show_entries stream=codec_name \
-            -of default=noprint_wrappers=1 nova-voice-ptbr-smoke.wav | grep -q 'codec_name=pcm_s16le'
+          python -c 'import wave; f=wave.open("nova-voice-ptbr-smoke.wav","rb"); print("sample_rate=",f.getframerate(),"frames=",f.getnframes(),"seconds=",round(f.getnframes()/f.getframerate(),2)); assert f.getnchannels()==1 and f.getsampwidth()==2 and 24000<f.getnframes() and 0<f.getnframes()/f.getframerate()<60'
       - name: Attach publicly shareable synthetic test voice (no private data)
         uses: actions/upload-artifact@v4
         with:
