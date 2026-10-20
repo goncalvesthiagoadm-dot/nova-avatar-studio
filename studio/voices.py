@@ -27,11 +27,15 @@ def _endpoint() -> str | None:
     raw = os.environ.get("NOVA_KOKORO_URL", "").strip().rstrip("/")
     if not raw:
         return None
-    parts = urlsplit(raw)
+    try:
+        parts = urlsplit(raw)
+        valid_port = parts.port is not None and 1 <= parts.port <= 65535
+    except ValueError:
+        return None
     if (parts.scheme != "http" or parts.hostname not in
             {"127.0.0.1", "localhost", "kokoro-tts"} or
             parts.path or parts.query or parts.fragment or parts.username or parts.password or
-            not parts.port):
+            not valid_port):
         return None
     return raw
 
