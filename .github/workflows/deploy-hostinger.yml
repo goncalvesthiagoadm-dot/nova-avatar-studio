@@ -2,6 +2,11 @@ name: Deploy NOVA to Hostinger
 
 on:
   workflow_dispatch:
+  # Only the NOVA Studio CI on the protected main branch can deploy automatically.
+  workflow_run:
+    workflows: ["NOVA Studio CI"]
+    types: [completed]
+    branches: [main]
 
 permissions:
   contents: read
@@ -12,7 +17,17 @@ concurrency:
 
 jobs:
   deploy:
-    if: github.ref == 'refs/heads/main'
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        (
+          github.event_name == 'workflow_run' &&
+          github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_repository.full_name == github.repository
+        )
+      )
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment: nova-production
@@ -20,6 +35,7 @@ jobs:
       - name: Deploy the selected main commit over pinned SSH
         shell: bash
         env:
+          NOVA_TARGET_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
           NOVA_SSH_HOST: ${{ vars.NOVA_SSH_HOST }}
           NOVA_SSH_USER: ${{ vars.NOVA_SSH_USER }}
           NOVA_SSH_PORT: ${{ vars.NOVA_SSH_PORT || '22' }}
@@ -33,7 +49,7 @@ jobs:
           (( NOVA_SSH_PORT >= 1 && NOVA_SSH_PORT <= 65535 )) || { echo "NOVA_SSH_PORT must be 1–65535."; exit 1; }
           [[ -n "$NOVA_SSH_PRIVATE_KEY" ]] || { echo "Configure NOVA_SSH_PRIVATE_KEY in the nova-production environment secrets."; exit 1; }
           [[ -n "$NOVA_SSH_KNOWN_HOSTS" ]] || { echo "Configure pinned NOVA_SSH_KNOWN_HOSTS in the nova-production environment secrets."; exit 1; }
-          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid workflow commit SHA."; exit 1; }
+          [[ "$NOVA_TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid NOVA target commit SHA."; exit 1; }
 
           install -m 700 -d "$HOME/.ssh"
           known_hosts="$RUNNER_TEMP/nova-known-hosts"
@@ -61,4 +77,21 @@ jobs:
             -o ServerAliveInterval=10 \
             -o ServerAliveCountMax=3 \
             "$NOVA_SSH_USER@$NOVA_SSH_HOST" \
-            "sudo -n env NOVA_EXPECTED_COMMIT='$GITHUB_SHA' bash /opt/nova-studio/deploy/hostinger/install.sh"
+            "printf 'NOVA diagnostics before deploy\\n'; free -h; df -h /opt; if command -v nvidia-smi >/dev/null 2>&1; then nvidia-smi --query-gpu=name,memory.total --format=csv,noheader; else echo 'No NVIDIA GPU tool detected'; fi"
+
+          # Restricted to NOVA only. The existing install.sh fails closed if the
+          # VPS lacks resources, if its checkout has uncommitted changes, or if
+          # another service owns the port; it never modifies Nginx/Hermes.
+          ssh \
+            -p "$NOVA_SSH_PORT" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$known_hosts" \
+            -o PasswordAuthentication=no \
+            -o KbdInteractiveAuthentication=no \
+            -o PreferredAuthentications=publickey \
+            -o ConnectTimeout=20 \
+            -o ServerAliveInterval=10 \
+            -o ServerAliveCountMax=3 \
+            "$NOVA_SSH_USER@$NOVA_SSH_HOST" \
+            "sudo -n env NOVA_EXPECTED_COMMIT='$NOVA_TARGET_SHA' bash /opt/nova-studio/deploy/hostinger/install.sh"
