@@ -72,7 +72,7 @@ for attempt in $(seq 1 45); do
 done
 [[ "$ready" == 1 ]] || FAIL "Voice worker failed health check"
 echo "Generating a short demo WAV only inside the isolated worker..."
-docker exec "$cid" python - <<'PY'
+docker exec -i "$cid" python - <<'PY'
 import io, json, urllib.request, wave
 payload=json.dumps({"model":"kokoro","input":"Olá, eu sou a NOVA Studio.",
                     "voice":"pf_dora","response_format":"wav","speed":1}).encode()
