@@ -62,7 +62,7 @@ async def lifespan(_app: FastAPI):
     yield
 
 
-app = FastAPI(title="NOVA Avatar Studio", version="0.2.0", lifespan=lifespan,
+app = FastAPI(title="NOVA Avatar Studio", version="0.3.0", lifespan=lifespan,
               docs_url="/api/docs", redoc_url=None)
 
 
