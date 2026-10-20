@@ -1,0 +1,68 @@
+name: NOVA Voice Lite Smoke
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'voice_lite/**'
+      - 'studio/voices.py'
+      - 'compose.yml'
+      - '.github/workflows/nova-voice-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-voice:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout NOVA
+        uses: actions/checkout@v5
+      - name: Build isolated quantized voice service
+        run: docker build -t nova-voice-lite:smoke -f voice_lite/Dockerfile .
+      - name: Start voice model with bounded memory
+        run: |
+          docker run -d --name nova-voice-smoke --memory=1024m --cpus=1 \
+            -p 127.0.0.1:18780:8880 nova-voice-lite:smoke
+      - name: Wait until voice model is genuinely ready
+        run: |
+          set -Eeuo pipefail
+          ready=0
+          for attempt in $(seq 1 90); do
+            if curl -fsS --max-time 3 http://127.0.0.1:18780/health > /tmp/voice-health.json; then
+              ready=1
+              break
+            fi
+            if ! docker ps --format '{{.Names}}' | grep -qx nova-voice-smoke; then
+              echo 'Voice worker stopped unexpectedly'
+              docker logs --tail=80 nova-voice-smoke || true
+              exit 1
+            fi
+            sleep 3
+          done
+          test "$ready" = 1
+          cat /tmp/voice-health.json
+      - name: Generate a real Brazilian Portuguese WAV using pf_dora
+        run: |
+          set -Eeuo pipefail
+          curl --fail-with-body --max-time 180 -sS \
+            http://127.0.0.1:18780/v1/audio/speech \
+            -H 'Content-Type: application/json' \
+            -d '{"model":"kokoro","input":"Olá! Eu sou a NOVA, sua apresentadora virtual. Em breve vamos criar vídeos com uma voz natural em português.","voice":"pf_dora","response_format":"wav","speed":1.0}' \
+            -o nova-voice-ptbr-smoke.wav
+          test "$(stat -c '%s' nova-voice-ptbr-smoke.wav)" -gt 1000
+          python -c 'import wave; f=wave.open("nova-voice-ptbr-smoke.wav","rb"); print("sample_rate=",f.getframerate(),"frames=",f.getnframes(),"seconds=",round(f.getnframes()/f.getframerate(),2)); assert f.getnchannels()==1 and f.getsampwidth()==2 and 24000<f.getnframes() and 0<f.getnframes()/f.getframerate()<60'
+      - name: Attach publicly shareable synthetic test voice (no private data)
+        uses: actions/upload-artifact@v4
+        with:
+          name: nova-voice-ptbr-smoke
+          path: nova-voice-ptbr-smoke.wav
+          retention-days: 7
+      - name: Show diagnostic logs if failed
+        if: failure()
+        run: docker logs --tail=120 nova-voice-smoke || true
+      - name: Remove only test voice container
+        if: always()
+        run: docker rm -f nova-voice-smoke >/dev/null 2>&1 || true

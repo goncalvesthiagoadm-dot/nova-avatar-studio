@@ -52,5 +52,36 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # Opt-in CPU-only worker. Safe-by-default: no public ports, no restart loop,
+  # and never launched by standard NOVA installer/deploy.
+  kokoro-lite:
+    profiles: ["voice-lite"]
+    build:
+      context: .
+      dockerfile: voice_lite/Dockerfile
+    restart: "no"
+    expose:
+      - "8880"
+    mem_limit: 1024m
+    cpus: "1.0"
+    pids_limit: 80
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=96m,mode=1777
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8880/health',timeout=5)"]
+      interval: 30s
+      timeout: 7s
+      retries: 2
+      start_period: 120s
+    logging:
+      driver: json-file
+      options:
+        max-size: "8m"
+        max-file: "2"
 volumes:
   nova_storage:
