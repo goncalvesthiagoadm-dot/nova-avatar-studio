@@ -1,6 +1,6 @@
 "use strict";
 const $=id=>document.getElementById(id);
-const state={id:null,projects:[],engines:[],engine:"audio-replace",videoUrl:null,apiKey:sessionStorage.getItem("nova_studio_key")||"",timer:null};
+const state={id:null,projects:[],engines:[],engine:"audio-replace",videoUrl:null,apiKey:sessionStorage.getItem("nova_studio_key")||"",timer:null,narrationAvailable:false,audioUrl:null};
 const toast=msg=>{const n=$("toast");n.textContent=msg;n.classList.add("visible");setTimeout(()=>n.classList.remove("visible"),3600)};
 async function api(url,options={}){
   const headers={...(options.headers||{})};
@@ -18,6 +18,9 @@ function selectProject(p){
   $("dropVideo").classList.toggle("loaded",!!p.video);$("dropAudio").classList.toggle("loaded",!!p.audio);
   $("dropVideo").querySelector(".pick-label").textContent=p.video?"✓ Vídeo enviado":"Selecionar vídeo ↗";
   $("dropAudio").querySelector(".pick-label").textContent=p.audio?"✓ Áudio enviado":"Selecionar áudio ↗";
+  if(state.audioUrl)URL.revokeObjectURL(state.audioUrl);
+  state.audioUrl=null;
+  $("narrationAudio").pause();$("narrationAudio").removeAttribute("src");$("narrationAudio").hidden=true;
   renderProjects();
 }
 function renderProjects(){
@@ -52,18 +55,25 @@ function updateEngineMessage(){
   $("engineNote").textContent=state.engine==="audio-replace"?"Teste técnico: junta seu vídeo-base com outro áudio. NÃO movimenta os lábios, nem usa IA. Para sincronia real selecione MuseTalk quando instalado.":"MuseTalk 1.5: gera sincronização labial com IA. A qualidade depende dos modelos, do vídeo-base e da GPU. Não promete equivalência ao HeyGen.";
 }
 async function boot(){
-  try{const h=await api("/api/v1/health");setConnected(true);state.engines=h.engines;renderEngines();await loadProjects()}
+  try{const h=await api("/api/v1/health");setConnected(true);state.engines=h.engines;
+    state.narrationAvailable=!!h.voices?.find(v=>v.id==="kokoro-ptbr"&&v.available);
+    $("generateNarration").disabled=!state.narrationAvailable;
+    $("narrationNote").textContent=state.narrationAvailable
+      ?"Voz feminina pt-BR (Kokoro) pronta. Salve o roteiro e gere um áudio WAV real no servidor."
+      :"Kokoro ainda não está instalado ou conectado. A prévia do navegador não exporta áudio.";
+    renderEngines();await loadProjects()}
   catch(e){
     setConnected(false);
     $("engineOptions").textContent=e.message.includes("Chave")
       ? "Acesso protegido. Toque em Entrar / Chave para informar sua chave privada."
       : "Não foi possível acessar a API.";
+    $("generateNarration").disabled=true;
     toast("Conexão: "+e.message)
   }
 }
 async function save(){
   const name=$("projectName").value.trim(),script=$("script").value;
-  if(!name){toast("Informe um nome de projeto.");$("projectName").focus();return}
+  if(!name){toast("Informe um nome de projeto.");$("projectName").focus();return false}
   try{
     if(!state.id){const p=await api("/api/v1/projects",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name,script})});state.id=p.id}
     else{
@@ -72,15 +82,18 @@ async function save(){
       if(current?.name!==name)toast("O nome atual é fixo após a criação; o roteiro foi salvo.");
       await api(`/api/v1/projects/${state.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({script})});
     }
-    await loadProjects();toast("Projeto salvo com sucesso.");
-  }catch(e){toast("Falha ao salvar: "+e.message)}
+    await loadProjects();toast("Projeto salvo com sucesso.");return true;
+  }catch(e){toast("Falha ao salvar: "+e.message);return false}
 }
 async function newProject(){
   state.id=null;$("projectName").value="";$("script").value="";$("charCount").textContent="0 / 4000";
   $("projectBadge").textContent="Novo projeto";$("currentCrumb").textContent="Novo projeto";
   for(const kind of ["video","audio"]){const zone=$(kind==="video"?"dropVideo":"dropAudio");zone.classList.remove("loaded");zone.querySelector(".pick-label").textContent="Selecionar "+kind+" ↗"}
   if(state.videoUrl)URL.revokeObjectURL(state.videoUrl);state.videoUrl=null;$("videoPreview").hidden=true;
-  $("stageInner").hidden=false;renderProjects();$("projectName").focus();toast("Novo projeto preparado.");
+  $("stageInner").hidden=false;
+  if(state.audioUrl)URL.revokeObjectURL(state.audioUrl);state.audioUrl=null;
+  $("narrationAudio").pause();$("narrationAudio").removeAttribute("src");$("narrationAudio").hidden=true;
+  renderProjects();$("projectName").focus();toast("Novo projeto preparado.");
 }
 async function upload(kind,file){
   if(!file)return;
@@ -128,7 +141,39 @@ async function render(){
     $("renderBtn").disabled=true;await checkJob(result.job_id);
   }catch(e){toast(e.message);setStage("Arquivos ou motor incompletos",e.message,"ATTENTION");$("renderBtn").disabled=false}
 }
+async function previewNarration(){
+  if(!state.id)return;
+  const headers={};
+  if(state.apiKey)headers["x-api-key"]=state.apiKey;
+  const response=await fetch(`/api/v1/projects/${state.id}/audio`,{headers});
+  if(!response.ok)throw new Error("Não foi possível carregar o áudio para ouvir.");
+  const blob=await response.blob();
+  if(state.audioUrl)URL.revokeObjectURL(state.audioUrl);
+  state.audioUrl=URL.createObjectURL(blob);
+  $("narrationAudio").src=state.audioUrl;
+  $("narrationAudio").hidden=false;
+}
+async function generateNarration(){
+  if(!state.narrationAvailable){toast("Kokoro local ainda não está disponível.");return}
+  if(!await save())return;
+  const button=$("generateNarration");
+  button.disabled=true;button.textContent="Gerando voz…";
+  $("narrationNote").textContent="Gerando áudio real com Kokoro no servidor. Aguarde.";
+  try{
+    const result=await api(`/api/v1/projects/${state.id}/narration`,{method:"POST"});
+    await loadProjects();
+    await previewNarration();
+    $("narrationNote").textContent=`Voz feminina gerada: ${result.duration}s. Ouça abaixo ou processe o vídeo.`;
+    toast("Narração criada e anexada ao projeto.");
+  }catch(e){
+    $("narrationNote").textContent="Falha na narração: "+e.message;
+    toast(e.message);
+  }finally{
+    button.disabled=!state.narrationAvailable;button.textContent="✦ Gerar voz feminina IA";
+  }
+}
 $("saveProject").onclick=save;
+$("generateNarration").onclick=generateNarration;
 for(const x of ["newProjectSide","newProjectTop"])$(x).onclick=newProject;
 $("navStudio").onclick=()=>{document.querySelector(".content").scrollIntoView({behavior:"smooth"})};
 $("navProjects").onclick=()=>{$("projects").scrollIntoView({behavior:"smooth"})};

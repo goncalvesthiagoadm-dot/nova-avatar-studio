@@ -133,3 +133,69 @@ def test_never_expose_server_asset_path(client, tmp_path):
     assert str(tmp_path) not in str(project_response.json())
     assert client.get("/live").json() == {"ok": True, "service": "nova-studio"}
     assert "default-src 'none'" in client.get("/").headers["content-security-policy"]
+
+
+def test_narration_rejects_missing_script_and_offline_voice(client):
+    project = client.post("/api/v1/projects", json={"name": "Teste voz"}).json()
+    pid = project["id"]
+    assert client.post(f"/api/v1/projects/{pid}/narration").status_code == 422
+    client.patch(f"/api/v1/projects/{pid}", json={"script": "Olá, sou a NOVA."})
+    r = client.post(f"/api/v1/projects/{pid}/narration")
+    assert r.status_code == 409, r.text
+    assert client.get(f"/api/v1/projects/{pid}/audio").status_code == 404
+
+
+def test_real_wav_from_mocked_kokoro_and_protected_download(client, tmp_path, monkeypatch):
+    _video, source_audio = make_mp4_and_wav(tmp_path)
+    p = client.post("/api/v1/projects", json={
+        "name": "Voz da apresentadora", "script": "Olá, sou a NOVA Studio."
+    }).json()
+    pid = p["id"]
+    monkeypatch.setattr(module, "kokoro_status", lambda: {"id": "kokoro-ptbr", "available": True})
+    def fake_local_engine(text, target):
+        assert text == "Olá, sou a NOVA Studio."
+        shutil.copyfile(source_audio, target)
+    monkeypatch.setattr(module, "generate_kokoro_audio", fake_local_engine)
+    result = client.post(f"/api/v1/projects/{pid}/narration")
+    assert result.status_code == 200, result.text
+    assert result.json()["kind"] == "neural_tts"
+    assert client.get(f"/api/v1/projects/{pid}").json()["audio"] is True
+    audio = client.get(f"/api/v1/projects/{pid}/audio")
+    assert audio.status_code == 200
+    assert audio.headers["content-type"].startswith("audio/wav")
+    assert audio.content[:4] == b"RIFF"
+    monkeypatch.setenv("STUDIO_API_TOKEN", "private-for-test")
+    assert client.get(f"/api/v1/projects/{pid}/audio").status_code == 401
+    assert client.get(f"/api/v1/projects/{pid}/audio",
+        headers={"x-api-key": "private-for-test"}).status_code == 200
+
+
+def test_narration_error_does_not_overwrite_previous_audio(client, tmp_path, monkeypatch):
+    p = client.post("/api/v1/projects", json={
+        "name": "Retenção", "script": "Texto válido."
+    }).json()
+    pid = p["id"]
+    _v, wav = make_mp4_and_wav(tmp_path)
+    with wav.open("rb") as audio_file:
+        assert client.post(f"/api/v1/projects/{pid}/assets/audio",
+            files={"file": ("original.wav", audio_file, "audio/wav")}).status_code == 200
+    original = client.get(f"/api/v1/projects/{pid}/audio").content
+    monkeypatch.setattr(module, "kokoro_status", lambda: {"available": True})
+    def fail_engine(text, target):
+        target.write_bytes(b"incomplete")
+        raise RuntimeError("Motor não respondeu")
+    monkeypatch.setattr(module, "generate_kokoro_audio", fail_engine)
+    assert client.post(f"/api/v1/projects/{pid}/narration").status_code == 502
+    assert client.get(f"/api/v1/projects/{pid}/audio").content == original
+
+
+def test_kokoro_url_restricts_external_hosts(monkeypatch):
+    from studio.voices import _endpoint
+    for url in ("https://api.example.com", "http://example.com:8880",
+                "http://127.0.0.1:8880/redirect",
+                "http://127.0.0.1:8880@evil.example:1234",
+                "http://localhost:notaport"):
+        monkeypatch.setenv("NOVA_KOKORO_URL", url)
+        assert _endpoint() is None
+    monkeypatch.setenv("NOVA_KOKORO_URL", "http://kokoro-tts:8880")
+    assert _endpoint() == "http://kokoro-tts:8880"

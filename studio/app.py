@@ -15,6 +15,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from .engines import engine_catalog, probe_media, render_audio_replace, render_musetalk
+from .voices import VoiceUnavailable, generate_kokoro_audio, kokoro_status
 
 BASE = Path(__file__).resolve().parent
 DATA = Path(os.environ.get("STUDIO_DATA_DIR", str(BASE.parent / "storage"))).resolve()
@@ -142,7 +143,8 @@ def live():
 
 @app.get("/api/v1/health")
 def health():
-    return {"ok": True, "product": "nova-studio", "version": "0.2.0", "engines": engine_catalog()}
+    return {"ok": True, "product": "nova-studio", "version": "0.3.0",
+            "engines": engine_catalog(), "voices": [kokoro_status()]}
 
 
 @app.get("/api/v1/projects")
@@ -212,6 +214,49 @@ async def upload_asset(pid: str, kind: str, file: UploadFile = File(...)):
         if candidate.parent == ASSETS:
             candidate.unlink(missing_ok=True)
     return {"ok": True, "kind": kind, "name": file.filename, "size": written, **info}
+
+
+@app.post("/api/v1/projects/{pid}/narration")
+def create_narration(pid: str):
+    """Generate an actual WAV from the saved script using local, optional Kokoro."""
+    p = project(pid)
+    script = p["script"].strip()
+    if not script or len(script) > 700:
+        raise HTTPException(422, "Salve um roteiro de 1 a 700 caracteres antes de gerar a voz")
+    if not kokoro_status()["available"]:
+        raise HTTPException(409, "Kokoro indisponível: configure e inicie o serviço local de voz")
+    target = ASSETS / f"{pid}-audio-kokoro-{uuid.uuid4().hex[:8]}.wav"
+    try:
+        generate_kokoro_audio(script, target)
+        media = probe_media(target)
+        if not media["has_audio"]:
+            raise ValueError("Kokoro não gerou uma faixa de áudio")
+    except (ValueError, RuntimeError, VoiceUnavailable) as exc:
+        target.unlink(missing_ok=True)
+        raise HTTPException(502, str(exc)) from exc
+    with conn() as cx:
+        cx.execute("UPDATE projects SET audio=? WHERE id=?", (str(target), pid))
+    old = p["audio"]
+    if old:
+        old_path = Path(old)
+        if old_path.parent == ASSETS and old_path != target:
+            old_path.unlink(missing_ok=True)
+    return {"ok": True, "voice": "pf_dora", "duration": media["duration"], "kind": "neural_tts"}
+
+
+@app.get("/api/v1/projects/{pid}/audio")
+def preview_project_audio(pid: str):
+    p = project(pid)
+    if not p["audio"]:
+        raise HTTPException(404, "Projeto sem áudio")
+    f = Path(p["audio"])
+    if f.resolve().parent != ASSETS.resolve() or not f.is_file():
+        raise HTTPException(404, "Áudio do projeto não encontrado")
+    media_type = {
+        ".wav": "audio/wav", ".mp3": "audio/mpeg",
+        ".aac": "audio/aac", ".m4a": "audio/mp4",
+    }.get(f.suffix.lower(), "application/octet-stream")
+    return FileResponse(f, media_type=media_type, filename="nova-voz" + f.suffix)
 
 
 def process(jid: str, pid: str, engine: str, video: str, audio: str):

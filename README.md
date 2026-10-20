@@ -1,6 +1,12 @@
-# NOVA Studio · v0.2
+# NOVA Studio · v0.3 (ramificação de validação)
 
 Plataforma independente de vídeo com avatares. **Não é o HeyGen e não integra ao Hermes**. Interface original, API para múltiplas integrações, módulos de renderização intercambiáveis.
+
+## Narração feminina por IA — etapa em validação
+
+A interface inclui **Gerar voz feminina IA**, que transforma o roteiro em um WAV com a voz brasileira `pf_dora` usando o serviço local Kokoro. A narração gerada substitui o áudio do projeto e pode ser usada na renderização MP4. O novo motor depende de um contêiner opcional com CPU/RAM suficientes; **não foi instalado nem ativado na VPS nesta entrega**. Sem Kokoro ativo, a função fica corretamente indisponível e o fluxo de vídeo anterior permanece intacto.
+
+O guia de instalação isolada, pré-requisitos, privacidade, testes e limitações está em [docs/KOKORO-VOZ.md](docs/KOKORO-VOZ.md). Kokoro sintetiza voz, mas **não sincroniza os lábios**: essa etapa continua dependente de MuseTalk/GPU ou outro motor de vídeo validado.
 
 ## O que funciona hoje
 
