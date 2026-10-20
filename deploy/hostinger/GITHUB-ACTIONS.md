@@ -21,7 +21,7 @@ A chave pública correspondente precisa estar autorizada no usuário SSH da VPS.
 
 ## Execução automática ou manual
 
-Após configurar as credenciais do Environment, um `push` ou merge em `main` inicia `NOVA Studio CI`. **Somente após sucesso**, o workflow de deploy executa. Falhas de CI e execuções de PRs não publicam nada.
+Após configurar as credenciais SSH do Environment `nova-production`, defina também a variável de repositório **`NOVA_DEPLOY_AUTO=true`** em *Settings → Secrets and variables → Actions → Variables*. Essa ativação é deliberada: por padrão, o deploy automático fica **desligado** para evitar falhas de notificações quando as credenciais SSH ainda não existem. Com a variável habilitada, um `push` ou merge em `main` inicia a CI e, **somente após sucesso**, o deploy. Falhas de CI e execuções de PRs não publicam nada.
 
 Alternativamente, abra **Actions → Deploy NOVA to Hostinger → Run workflow**, selecione `main` e execute. O workflow envia à VPS o SHA exato a publicar e apresenta diagnóstico de memória, disco e presença de GPU (não mostra segredos).
 
