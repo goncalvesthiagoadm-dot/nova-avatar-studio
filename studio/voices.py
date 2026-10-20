@@ -33,7 +33,7 @@ def _endpoint() -> str | None:
     except ValueError:
         return None
     if (parts.scheme != "http" or parts.hostname not in
-            {"127.0.0.1", "localhost", "kokoro-tts"} or
+            {"127.0.0.1", "localhost", "kokoro-tts", "kokoro-lite"} or
             parts.path or parts.query or parts.fragment or parts.username or parts.password or
             not valid_port):
         return None
