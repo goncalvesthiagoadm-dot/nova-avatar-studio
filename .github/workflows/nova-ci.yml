@@ -38,6 +38,7 @@ jobs:
           bash -n deploy/hostinger/https-check.sh
           bash -n deploy/hostinger/https-publish.sh
           bash -n deploy/hostinger/https-renew.sh
+          bash -n deploy/hostinger/voice-lite-trial.sh
           STUDIO_API_TOKEN=ci-valid-test-only-token-not-for-production docker compose config -q
       - name: Test API and FFmpeg render
         run: python -m pytest -q tests
