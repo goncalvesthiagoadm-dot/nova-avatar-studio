@@ -85,8 +85,8 @@ section "PORTAS TCP EM ESCUTA (SEM DIVULGAR IP DO SERVIDOR)"
 if have ss; then
   ss -H -ltn 2>/dev/null | awk '{
     addr=$4; port=addr; sub(/^.*:/,"",port);
-    if (addr ~ /^127[.]/ || addr ~ /^\\[::1\\]/) scope="local";
-    else if (addr ~ /^0[.]0[.]0[.]0:/ || addr ~ /^\\[::\\]:/ || addr ~ /^\\*:/) scope="todas_interfaces";
+    if (addr ~ /^127[.]/ || index(addr,"[::1]:")==1) scope="local";
+    else if (addr ~ /^0[.]0[.]0[.]0:/ || index(addr,"[::]:")==1 || index(addr,"*:")==1) scope="todas_interfaces";
     else scope="outra_interface";
     if (port ~ /^[0-9]+$/) print scope,port
   }' | sort -k2,2n -k1,1 | uniq | head -n 60
