@@ -48,8 +48,8 @@
             <div class="formrow"><label for="projectName">NOME DO PROJETO</label><input id="projectName" type="text" maxlength="70" placeholder="Ex.: Apresentação do produto" /></div>
             <div class="formrow"><div class="labelrow"><label for="script">TEXTO DA APRESENTAÇÃO</label><span class="charcount" id="charCount">0 / 4000</span></div>
             <textarea id="script" maxlength="4000" rows="6" placeholder="Escreva aqui o que a apresentadora deve dizer…"></textarea></div>
-            <div class="inline-actions"><button class="secondary" id="saveProject">Salvar roteiro</button><button class="ghost" id="hearScript">▷ Ouvir no navegador</button></div>
-            <p class="fieldnote">A leitura de texto é uma prévia com a voz do navegador; não produz a narração do MP4.</p>
+            <div class="inline-actions"><button class="secondary" id="saveProject">Salvar roteiro</button><button class="ghost" id="hearScript">▷ Ouvir no navegador</button><button class="secondary" id="generateNarration" disabled>✦ Gerar voz feminina IA</button></div>
+            <p class="fieldnote" id="narrationNote">Gerar voz feminina requer o Kokoro local. O botão será ativado quando o motor estiver disponível.</p><audio id="narrationAudio" controls preload="none" hidden style="width:100%;margin-top:8px"></audio>
 
             <div class="line"></div>
             <div class="panel-heading compact"><div><span class="step-label">02 / ARQUIVOS</span><h2>Seu material</h2></div></div>
